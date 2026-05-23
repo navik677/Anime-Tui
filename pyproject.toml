@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anime-tui"
+version = "1.0.0"
+description = "TUI Anime Player for Arch Linux — Anilibria / YummyAnime / HDRezka"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+]
+
+[project.scripts]
+anime-tui = "anime_tui.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anime_tui*"]
