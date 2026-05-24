@@ -1,98 +1,25 @@
-"""
-fzf-based TUI with:
-  - Live search (results update on Enter or after typing)
-  - In-UI provider switcher (Ctrl+1 / Ctrl+2 / Ctrl+3)
-  - Episode & quality selection menus
-"""
-from __future__ import annotations
-import subprocess
-import sys
-import os
-import json
-import tempfile
+with open("anime_tui/ui.py", "r") as f:
+    code = f.read()
+
 import re
-import shutil
-from pathlib import Path
-from typing import TypeVar, Callable, Optional
+match = re.search(r'def search_anime\(.*?def _cleanup', code, flags=re.DOTALL)
+if not match:
+    print("Could not find search_anime function!")
+    exit(1)
 
-from .models import Anime, Episode, Quality
-from .i18n import t
+old_search_anime = match.group(0)
 
-T = TypeVar("T")
-
-# ── ANSI colours ──────────────────────────────────────────────────────
-RESET   = "\033[0m"
-BOLD    = "\033[1m"
-CYAN    = "\033[38;5;87m"
-MAGENTA = "\033[38;5;213m"
-YELLOW  = "\033[38;5;220m"
-DIM     = "\033[2m"
-
-FZF_COLORS = (
-    "dark,"
-    "fg:252,fg+:255,bg+:236,"
-    "hl:87,hl+:87,"
-    "pointer:87,marker:87,"
-    "header:244,info:244,"
-    "prompt:87,spinner:87,"
-    "border:87"
-)
-
-RAW_BANNER = r"""
-  ░█████╗░███╗░░██╗██╗███╗░░░███╗███████╗  ████████╗██╗░░░██╗██╗
-  ██╔══██╗████╗░██║██║████╗░████║██╔════╝  ╚══██╔══╝██║░░░██║██║
-  ███████║██╔██╗██║██║██╔████╔██║█████╗░░  ░░░██║░░░██║░░░██║██║
-  ██╔══██║██║╚████║██║██║╚██╔╝██║██╔══╝░░  ░░░██║░░░██║░░░██║██║
-  ██║░░██║██║░╚███║██║██║░╚═╝░██║███████╗  ░░░██║░░░╚██████╔╝██║
-  ╚═╝░░╚═╝╚═╝░░╚══╝╚═╝╚═╝░░░░╚═╝╚══════╝  ░░░╚═╝░░░░╚═════╝░╚═╝
-"""
-
-def _generate_gradient_banner():
-    colors = [87, 81, 75, 69, 63, 57, 93, 129, 165, 201, 207, 213]
-    out = []
-    lines = RAW_BANNER.strip("\n").split("\n")
-    for line in lines:
-        colored_line = ""
-        # Avoid zero division if line is empty
-        length = max(len(line), 1)
-        for j, char in enumerate(line):
-            color_idx = int((j / length) * (len(colors) - 1))
-            colored_line += f"\033[38;5;{colors[color_idx]}m{char}"
-        out.append(colored_line + "\033[0m")
-    out.append(f"{DIM}  TUI Anime Player  •  Anilibria / YummyAnime / HDRezka{RESET}")
-    return "\n".join(out)
-
-BANNER = _generate_gradient_banner()
-
-PROVIDER_LABELS = {
-    "anilibria":  "АніЛібрія",
-    "yummyanime": "YummyAnime",
-    "rezka":      "HDRezka",
-    "favorites":  "Улюблені",
-}
-
-def _check_fzf():
-    r = subprocess.run(["which", "fzf"], capture_output=True)
-    if r.returncode != 0:
-        print(f"{YELLOW}[ERROR]{RESET} fzf не знайдено. sudo pacman -S fzf", file=sys.stderr)
-        sys.exit(1)
-
-
-# ─────────────────────────────────────────────────────────────────────
-# LIVE SEARCH WITH PROVIDER SWITCHER
-# ─────────────────────────────────────────────────────────────────────
-
-ALL_GENRES = [
+new_search_anime = """ALL_GENRES = [
     "Екшен", "Комедія", "Романтика", "Драма", "Фентезі", "Ісекай", 
     "Надприродне", "Пригоди", "Жахи", "Детектив", "Сьонен", "Сейнен", 
     "Повсякденність", "Меха", "Етті", "Спорт", "Музика", "Ігри", "Кіберпанк"
 ]
 
 def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -> Optional[tuple[Anime, str]]:
-    """
+    \"\"\"
     Open fzf with live search and Ctrl+1/2/3 provider switcher.
     Returns (Anime, provider_name) or None if user cancelled.
-    """
+    \"\"\"
     _check_fzf()
 
     pid = os.getpid()
@@ -126,20 +53,20 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
 
             if term_width < 75:
                 header = (
-                    f"{CYAN}{BOLD}  ANIME TUI{RESET} {DIM}• Anilibria / YummyAnime / HDRezka{RESET}\n"
-                    f" Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka │ Alt+4 {t('provider_favorites')} \n"
+                    f"{CYAN}{BOLD}  ANIME TUI{RESET} {DIM}• Anilibria / YummyAnime / HDRezka{RESET}\\n"
+                    f" Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka │ Alt+4 {t('provider_favorites')} \\n"
                     f" {t('header_nav_hint')}"
                 )
             else:
                 header = (
-                    BANNER + "\n"
-                    f" [ Alt+1 АніЛібрія ]   [ Alt+2 YummyAnime ]   [ Alt+3 HDRezka ]   [ Alt+4 {t('provider_favorites')} ] \n"
+                    BANNER + "\\n"
+                    f" [ Alt+1 АніЛібрія ]   [ Alt+2 YummyAnime ]   [ Alt+3 HDRezka ]   [ Alt+4 {t('provider_favorites')} ] \\n"
                     f" {t('header_nav_hint')}"
                 )
 
             # Non-empty placeholder so fzf does NOT exit immediately on empty stdin.
-            # The leading tab matches our --delimiter=\t --with-nth=2 format.
-            placeholder = f"\t  ⌨   {t('header_search_prompt')}"
+            # The leading tab matches our --delimiter=\\t --with-nth=2 format.
+            placeholder = f"\\t  ⌨   {t('header_search_prompt')}"
 
             fzf_args = [
                 "fzf",
@@ -158,7 +85,7 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
                 "--header", header,
                 "--header-first",
                 "--info=inline",
-                "--delimiter", "\t",
+                "--delimiter", "\\t",
                 "--with-nth", "2",      # hide index column; show only display text
                 "--preview", f"{py} -m anime_tui.preview {{1}}",
                 "--preview-window", "right:45%,border-left,<120(bottom:45%,border-top)",
@@ -239,8 +166,8 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
             if not selected_line or selected_line.lstrip().startswith(("⌨", "✗", "·")):
                 return None
 
-            # Parse "index\tDisplay Text"
-            parts = selected_line.split("\t", 1)
+            # Parse "index\\tDisplay Text"
+            parts = selected_line.split("\\t", 1)
             try:
                 idx = int(parts[0])
             except (ValueError, IndexError):
@@ -271,70 +198,9 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
         _cleanup(cache_file)
         _cleanup(alt_g_file)
 
-def _cleanup(path: Path):
-    try:
-        path.unlink()
-    except Exception:
-        pass
+def _cleanup"""
 
+code = code.replace(old_search_anime, new_search_anime)
 
-# ─────────────────────────────────────────────────────────────────────
-# GENERIC SELECTOR  (episodes, quality)
-# ─────────────────────────────────────────────────────────────────────
-
-def select(
-    items: list[T],
-    display_fn: Callable[[T], str] = str,
-    prompt: str = "Оберіть > ",
-    header: Optional[str] = None,
-) -> Optional[T]:
-    """Show items in fzf, return selected item or None."""
-    if not items:
-        return None
-
-    _check_fzf()
-    labels = [display_fn(item) for item in items]
-
-    fzf_args = [
-        "fzf",
-        "--prompt", f" {prompt}",
-        "--layout=reverse",
-        "--border=rounded",
-        "--padding=1,2",
-        "--margin=1,2",
-        "--height=100%",
-        f"--color={FZF_COLORS}",
-        "--info=inline",
-        "--ansi",
-        "--no-sort",
-    ]
-    if header:
-        fzf_args += ["--border-label", f" {header} ", "--border-label-pos=3"]
-
-    try:
-        result = subprocess.run(
-            fzf_args,
-            input="\n".join(labels),
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-    except FileNotFoundError:
-        print("[ERROR] fzf не знайдено.", file=sys.stderr)
-        sys.exit(1)
-
-    if result.returncode != 0:
-        return None
-
-    chosen = result.stdout.strip()
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    
-    for item, label in zip(items, labels):
-        stripped_label = ansi_escape.sub('', label).strip()
-        if stripped_label == chosen:
-            return item
-    return None
-
-
-def confirm(message: str) -> bool:
-    choice = select(["Так", "Ні"], prompt=f"{message} > ")
-    return choice == "Так"
+with open("anime_tui/ui.py", "w") as f:
+    f.write(code)

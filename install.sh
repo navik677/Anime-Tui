@@ -1,111 +1,68 @@
 #!/usr/bin/env bash
-# ============================================================
-#  anime-tui — Скрипт встановлення для Arch Linux
-# ============================================================
-set -euo pipefail
 
-CYAN='\033[38;5;87m'
-GREEN='\033[38;5;82m'
-YELLOW='\033[38;5;220m'
-RED='\033[38;5;196m'
-BOLD='\033[1m'
-RESET='\033[0m'
+set -e
 
-info()    { echo -e "${CYAN}[info]${RESET} $*"; }
-success() { echo -e "${GREEN}[ok]${RESET} $*"; }
-warn()    { echo -e "${YELLOW}[warn]${RESET} $*"; }
-error()   { echo -e "${RED}[error]${RESET} $*" >&2; exit 1; }
+echo -e "\033[1;36m==> Встановлення Anime TUI...\033[0m"
 
-echo -e "${CYAN}${BOLD}"
-cat << 'EOF'
-  ╔═══════════════════════════════════════╗
-  ║     anime-tui — Встановлення          ║
-  ║     Arch Linux TUI Anime Player       ║
-  ╚═══════════════════════════════════════╝
+# 1. Check for Python 3
+if ! command -v python3 &> /dev/null; then
+    echo -e "\033[1;31m[Помилка]\033[0m Python 3 не знайдено. Встановіть Python 3."
+    exit 1
+fi
+
+# 2. Check for system dependencies (fzf, mpv)
+echo -e "\033[1;34m==> Перевірка системних залежностей (fzf, mpv)...\033[0m"
+MISSING_PKGS=""
+if ! command -v fzf &> /dev/null; then MISSING_PKGS="fzf $MISSING_PKGS"; fi
+if ! command -v mpv &> /dev/null; then MISSING_PKGS="mpv $MISSING_PKGS"; fi
+
+if [ -n "$MISSING_PKGS" ]; then
+    echo -e "\033[1;33m[Попередження]\033[0m Відсутні системні пакети: $MISSING_PKGS"
+    echo -e "Спроба автоматичного встановлення..."
+    
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y $MISSING_PKGS
+    elif command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm $MISSING_PKGS
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y $MISSING_PKGS
+    elif command -v brew &> /dev/null; then
+        brew install $MISSING_PKGS
+    else
+        echo -e "\033[1;31m[Помилка]\033[0m Не вдалося визначити пакетний менеджер. Будь ласка, встановіть '$MISSING_PKGS' вручну."
+        exit 1
+    fi
+fi
+
+# 3. Create virtualenv and install python dependencies
+VENV_DIR="$HOME/.local/share/anime-tui/venv"
+echo -e "\033[1;34m==> Налаштування віртуального середовища Python...\033[0m"
+mkdir -p "$HOME/.local/share/anime-tui"
+python3 -m venv "$VENV_DIR"
+
+echo -e "\033[1;34m==> Встановлення Python пакетів...\033[0m"
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install requests climage
+
+# 4. Copy source code
+echo -e "\033[1;34m==> Копіювання файлів...\033[0m"
+cp -r anime_tui "$HOME/.local/share/anime-tui/"
+
+# 5. Create executable wrapper
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+WRAPPER="$BIN_DIR/anime-tui"
+
+cat > "$WRAPPER" << 'EOF'
+#!/usr/bin/env bash
+export PYTHONPATH="$HOME/.local/share/anime-tui:$PYTHONPATH"
+exec "$HOME/.local/share/anime-tui/venv/bin/python" -m anime_tui.main "$@"
 EOF
-echo -e "${RESET}"
 
-# ── Check OS ──────────────────────────────────────────────────────────
-if ! command -v pacman &>/dev/null; then
-    warn "pacman не знайдено. Цей скрипт розрахований на Arch Linux."
-    warn "На інших дистрибутивах встановіть залежності вручну."
-fi
+chmod +x "$WRAPPER"
 
-# ── System dependencies ───────────────────────────────────────────────
-info "Перевірка системних залежностей…"
-
-MISSING_PKGS=()
-for pkg in python fzf mpv; do
-    if ! command -v "$pkg" &>/dev/null; then
-        MISSING_PKGS+=("$pkg")
-    fi
-done
-
-# yt-dlp — check separately (may be installed via pip or pacman)
-if ! command -v yt-dlp &>/dev/null; then
-    MISSING_PKGS+=("yt-dlp")
-fi
-
-if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
-    info "Встановлення системних пакетів: ${MISSING_PKGS[*]}"
-    sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || \
-        error "Не вдалося встановити пакети. Спробуйте вручну: sudo pacman -S ${MISSING_PKGS[*]}"
-    success "Системні залежності встановлено"
-else
-    success "Всі системні залежності вже встановлені"
-fi
-
-# ── Python check ───────────────────────────────────────────────────────
-PYTHON_VERSION=$(python --version 2>&1 | cut -d' ' -f2)
-info "Python версія: ${PYTHON_VERSION}"
-
-PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
-PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
-if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]; }; then
-    error "Потрібен Python 3.10+. Поточна версія: ${PYTHON_VERSION}"
-fi
-
-# ── Install anime-tui ─────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-info "Встановлення anime-tui…"
-
-# Prefer pipx for isolated install, fall back to pip --user
-if command -v pipx &>/dev/null; then
-    info "Встановлення через pipx (ізольоване середовище)…"
-    pipx install --force "$SCRIPT_DIR"
-    success "anime-tui встановлено через pipx"
-elif python -m pip install --user --quiet "$SCRIPT_DIR"; then
-    success "anime-tui встановлено через pip (--user)"
-    # Ensure ~/.local/bin is in PATH
-    LOCAL_BIN="$HOME/.local/bin"
-    if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
-        warn "Додайте до ~/.bashrc або ~/.zshrc:"
-        echo "  export PATH=\"\$PATH:$HOME/.local/bin\""
-    fi
-else
-    error "Не вдалося встановити anime-tui. Спробуйте вручну: pip install --user $SCRIPT_DIR"
-fi
-
-# ── HdRezkaApi ────────────────────────────────────────────────────────
-info "Встановлення Python залежностей…"
-python -m pip install --user --quiet HdRezkaApi beautifulsoup4 lxml requests || \
-    warn "Деякі Python залежності не вдалося встановити. Спробуйте: pip install -r requirements.txt"
-
-# ── Generate default config ────────────────────────────────────────────
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/anime-tui"
-if [ ! -f "$CONFIG_DIR/config.toml" ]; then
-    info "Створення конфігураційного файлу…"
-    anime-tui --init-config 2>/dev/null || true
-fi
-
-# ── Done ──────────────────────────────────────────────────────────────
-echo
-echo -e "${GREEN}${BOLD}✓ Встановлення завершено!${RESET}"
-echo
-echo -e "  Запуск:       ${BOLD}anime-tui${RESET}"
-echo -e "  З провайдером: ${BOLD}anime-tui -p anilibria${RESET}"
-echo -e "  Пошук:        ${BOLD}anime-tui -q \"Атака Титанів\"${RESET}"
-echo -e "  Конфіг:       ${BOLD}$CONFIG_DIR/config.toml${RESET}"
-echo -e "  Допомога:     ${BOLD}anime-tui --help${RESET}"
-echo
+echo -e "\033[1;32m[Готово!]\033[0m Anime TUI успішно встановлено!"
+echo -e "Увага: переконайтеся, що \033[1m$BIN_DIR\033[0m додано до вашого \$PATH."
+echo -e "Якщо ви використовуєте ZSH або Bash і команда 'anime-tui' не працює, виконайте:"
+echo -e "  \033[36mecho 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc\033[0m"
+echo -e "\nЗапустити програму можна командою: \033[1;36manime-tui\033[0m"
