@@ -11,10 +11,11 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # 2. Check for system dependencies (fzf, mpv)
-echo -e "\033[1;34m==> Перевірка системних залежностей (fzf, mpv)...\033[0m"
+echo -e "\033[1;34m==> Перевірка системних залежностей (fzf, mpv, yt-dlp)...\033[0m"
 MISSING_PKGS=""
 if ! command -v fzf &> /dev/null; then MISSING_PKGS="fzf $MISSING_PKGS"; fi
 if ! command -v mpv &> /dev/null; then MISSING_PKGS="mpv $MISSING_PKGS"; fi
+if ! command -v yt-dlp &> /dev/null; then MISSING_PKGS="yt-dlp $MISSING_PKGS"; fi
 
 if [ -n "$MISSING_PKGS" ]; then
     echo -e "\033[1;33m[Попередження]\033[0m Відсутні системні пакети: $MISSING_PKGS"
@@ -42,7 +43,7 @@ python3 -m venv "$VENV_DIR"
 
 echo -e "\033[1;34m==> Встановлення Python пакетів...\033[0m"
 "$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install requests climage
+"$VENV_DIR/bin/pip" install requests climage HdRezkaApi
 
 # 4. Copy source code
 echo -e "\033[1;34m==> Копіювання файлів...\033[0m"
