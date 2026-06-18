@@ -14,6 +14,7 @@ import os
 from typing import Optional
 
 from .models import Quality, Episode
+from . import config
 
 MPV_BINARY = os.environ.get("MPV_BIN", "mpv")
 
@@ -45,6 +46,9 @@ def play(
     ep_label = f" — Серія {episode.number}" if episode else ""
     args += [f"--title={title}{ep_label}"]
 
+    if config.get("hide_mpv_logs", True):
+        args += ["--msg-level=all=fatal,statusline=status"]
+
     # HTTP headers
     header_fields = []
     if quality.headers.get("Referer"):
@@ -58,11 +62,12 @@ def play(
     # HLS options for smoother streaming
     if ".m3u8" in quality.url:
         args += [
-            "--demuxer-max-bytes=150MiB",
             "--cache=yes",
+            "--demuxer-max-bytes=500MiB",
+            "--demuxer-readahead-secs=300",
             "--stream-lavf-o=reconnect=1",
             "--stream-lavf-o=reconnect_streamed=1",
-            "--stream-lavf-o=reconnect_delay_max=5",
+            "--stream-lavf-o=reconnect_delay_max=30",
         ]
 
     # Skip times (Anilibria openings/endings)

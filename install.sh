@@ -47,6 +47,7 @@ echo -e "\033[1;34m==> Встановлення Python пакетів...\033[0m"
 
 # 4. Copy source code
 echo -e "\033[1;34m==> Копіювання файлів...\033[0m"
+rm -rf "$HOME/.local/share/anime-tui/anime_tui"
 cp -r anime_tui "$HOME/.local/share/anime-tui/"
 
 # 5. Create executable wrapper

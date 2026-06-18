@@ -1,0 +1,3 @@
+@echo off
+echo Starting Anime TUI Windows Installer...
+powershell -ExecutionPolicy Bypass -File "%~dp0install.ps1"

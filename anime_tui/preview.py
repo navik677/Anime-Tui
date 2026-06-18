@@ -6,12 +6,7 @@ import textwrap
 from pathlib import Path
 
 # ANSI colors
-CYAN = "\033[38;5;87m"
-MAGENTA = "\033[38;5;213m"
-YELLOW = "\033[38;5;220m"
-RESET = "\033[0m"
-DIM = "\033[2m"
-BOLD = "\033[1m"
+from .theme import CYAN, MAGENTA, YELLOW, RESET, DIM, BOLD
 
 def main():
     if len(sys.argv) < 2:
@@ -105,6 +100,24 @@ def main():
         for c in comments:
             text_lines.extend([f"{DIM}> {line}{RESET}" for line in textwrap.wrap(c, width=50)])
             text_lines.append("")
+
+    try:
+        status_file = Path(os.path.expanduser("~/.cache/anime-tui/status.json"))
+        if status_file.exists():
+            status_data = json.loads(status_file.read_text(encoding="utf-8"))
+            if status_data.get("active"):
+                ep = status_data.get('episode', '')
+                pct = status_data.get('percent', '')
+                spd = status_data.get('speed', '')
+                cur = status_data.get('current', 1)
+                tot = status_data.get('total', 1)
+                text_lines.append("")
+                text_lines.append(f"{CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
+                text_lines.append(f"⬇️  {BOLD}Завантаження ({cur}/{tot}):{RESET} {ep}")
+                text_lines.append(f"   {CYAN}Прогрес:{RESET} {pct}  {CYAN}Швидкість:{RESET} {spd}")
+    except Exception:
+        pass
+
 
     img_lines = []
     has_image = False

@@ -38,7 +38,14 @@ _LOCALES = {
         "hint_network": "Підказка: Перевірте підключення або VPN.",
         "error_prefix": "[помилка]",
         "cli_available_providers": "Доступні провайдери:",
-        "prompt_select": "Оберіть > "
+        "prompt_select": "Оберіть > ",
+        "btn_download_all": "Завантажити всі серії (сезон)",
+        "prompt_action": "Дія > ",
+        "btn_play": "Дивитись (mpv)",
+        "btn_download": "Завантажити",
+        "info_downloading": "Завантаження",
+        "err_download": "Помилка завантаження",
+        "info_download_success": "Успішно завантажено в"
     },
     "ru": {
         "err_unknown_provider": "Неизвестный провайдер",
@@ -76,7 +83,14 @@ _LOCALES = {
         "hint_network": "Подсказка: Проверьте подключение или VPN.",
         "error_prefix": "[ошибка]",
         "cli_available_providers": "Доступные провайдеры:",
-        "prompt_select": "Выберите > "
+        "prompt_select": "Выберите > ",
+        "btn_download_all": "Скачать все серии (сезон)",
+        "prompt_action": "Действие > ",
+        "btn_play": "Смотреть (mpv)",
+        "btn_download": "Скачать",
+        "info_downloading": "Загрузка",
+        "err_download": "Ошибка загрузки",
+        "info_download_success": "Успешно скачано в"
     },
     "en": {
         "err_unknown_provider": "Unknown provider",
@@ -114,7 +128,14 @@ _LOCALES = {
         "hint_network": "Hint: Check internet connection or VPN.",
         "error_prefix": "[error]",
         "cli_available_providers": "Available providers:",
-        "prompt_select": "Select > "
+        "prompt_select": "Select > ",
+        "btn_download_all": "Download all episodes (season)",
+        "prompt_action": "Action > ",
+        "btn_play": "Play (mpv)",
+        "btn_download": "Download",
+        "info_downloading": "Downloading",
+        "err_download": "Download error",
+        "info_download_success": "Successfully downloaded to"
     }
 }
 

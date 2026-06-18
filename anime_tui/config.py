@@ -11,12 +11,15 @@ from typing import Any
 # Default configuration values
 DEFAULTS: dict[str, Any] = {
     "default_provider": "anilibria",
-    "default_quality": "720p",
+    "default_quality": "best",
     "language": "auto",
+    "theme": "default",
     "mpv_path": "mpv",
+    "hide_mpv_logs": True,
+    "download_dir": "~/Downloads/Anime",
     "fzf_height": "60%",
     "anilibria": {
-        "api_base": "https://api.anilibria.tv/v3",
+        "api_base": "https://anilibria.top/api/v1",
         "stream_host": "https://cache.libria.fun",
     },
     "yummyanime": {
@@ -24,6 +27,9 @@ DEFAULTS: dict[str, Any] = {
     },
     "rezka": {
         "base_url": "https://hdrezka.ag",
+    },
+    "animevost": {
+        "api_base": "https://api.animevost.org/v1",
     },
 }
 
@@ -98,18 +104,27 @@ def write_default_config():
 # Default provider: "anilibria", "yummyanime", or "rezka"
 default_provider = "anilibria"
 
-# Default quality preference: "1080p", "720p", "480p"
-default_quality = "720p"
+# Default quality preference: "best", "1080p", "720p", "480p"
+default_quality = "best"
 
 # Interface language: "auto", "uk", "ru", "en"
 language = "auto"
 
+# Visual theme: "default", "dracula", "catppuccin_mocha", "nord"
+theme = "default"
+
 # Path to mpv binary (or just "mpv" if it's in PATH)
 mpv_path = "mpv"
 
+# Hide mpv connection/ffmpeg error logs but keep status line
+hide_mpv_logs = true
+
+# Directory to save downloaded episodes
+download_dir = "~/Downloads/Anime"
+
 [anilibria]
-# Override API base URL if needed
-# api_base = "https://api.anilibria.tv/v3"
+# Override API base URL if needed (e.g., https://api.anilibria.tv/v3)
+# api_base = "https://anilibria.top/api/v1"
 # stream_host = "https://cache.libria.fun"
 
 [yummyanime]
@@ -118,6 +133,9 @@ mpv_path = "mpv"
 [rezka]
 # Use REZKA_URL env variable or set here for mirror
 # base_url = "https://hdrezka.ag"
+
+[animevost]
+# api_base = "https://api.animevost.org/v1"
 """
     _CONFIG_FILE.write_text(content)
     print(f"[config] Конфіг збережено: {_CONFIG_FILE}")

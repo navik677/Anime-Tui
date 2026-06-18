@@ -19,9 +19,8 @@ import requests
 
 from ..models import Anime, Episode, Quality, Stream
 from .base import BaseProvider
+from ..config import get as get_config
 
-# Allow overriding the mirror via env variable (useful if rezka.ag is blocked)
-REZKA_BASE = os.environ.get("REZKA_URL", "https://hdrezka.ag")
 DEFAULT_TIMEOUT = 20
 
 HEADERS = {
@@ -57,6 +56,7 @@ class RezkaProvider(BaseProvider):
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
         self._check_library()
+        self.rezka_base = get_config("rezka.base_url", "https://hdrezka.ag").rstrip("/")
 
     def _check_library(self):
         try:
@@ -71,7 +71,7 @@ class RezkaProvider(BaseProvider):
     # ── Search ──────────────────────────────────────────────────────────
     def search(self, query: str, limit: int = 20) -> list[Anime]:
         if not query:
-            url = REZKA_BASE
+            url = self.rezka_base
             try:
                 resp = self.session.get(url, timeout=DEFAULT_TIMEOUT)
                 resp.raise_for_status()
@@ -79,7 +79,7 @@ class RezkaProvider(BaseProvider):
                 print(f"[rezka] Помилка: {exc}", file=sys.stderr)
                 return []
         else:
-            url = f"{REZKA_BASE}/search/"
+            url = f"{self.rezka_base}/search/"
             try:
                 resp = self.session.get(
                     url,
@@ -107,7 +107,7 @@ class RezkaProvider(BaseProvider):
             
             href = title_a.get("href")
             if not href.startswith("http"):
-                href = urljoin(REZKA_BASE, href)
+                href = urljoin(self.rezka_base, href)
                 
             title = title_a.get_text(strip=True)
             if not title:

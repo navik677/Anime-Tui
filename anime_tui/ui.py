@@ -21,22 +21,7 @@ from .i18n import t
 T = TypeVar("T")
 
 # ── ANSI colours ──────────────────────────────────────────────────────
-RESET   = "\033[0m"
-BOLD    = "\033[1m"
-CYAN    = "\033[38;5;87m"
-MAGENTA = "\033[38;5;213m"
-YELLOW  = "\033[38;5;220m"
-DIM     = "\033[2m"
-
-FZF_COLORS = (
-    "dark,"
-    "fg:252,fg+:255,bg+:236,"
-    "hl:87,hl+:87,"
-    "pointer:87,marker:87,"
-    "header:244,info:244,"
-    "prompt:87,spinner:87,"
-    "border:87"
-)
+from .theme import RESET, BOLD, CYAN, MAGENTA, YELLOW, DIM, FZF_COLORS
 
 RAW_BANNER = r"""
   ░█████╗░███╗░░██╗██╗███╗░░░███╗███████╗  ████████╗██╗░░░██╗██╗
@@ -53,7 +38,6 @@ def _generate_gradient_banner():
     lines = RAW_BANNER.strip("\n").split("\n")
     for line in lines:
         colored_line = ""
-        # Avoid zero division if line is empty
         length = max(len(line), 1)
         for j, char in enumerate(line):
             color_idx = int((j / length) * (len(colors) - 1))
@@ -126,15 +110,15 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
 
             if term_width < 75:
                 header = (
-                    f"{CYAN}{BOLD}  ANIME TUI{RESET} {DIM}• Anilibria / YummyAnime / HDRezka{RESET}\n"
-                    f" Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka │ Alt+4 {t('provider_favorites')} \n"
-                    f" {t('header_nav_hint')}"
+                    f"{CYAN}{BOLD}  ANIME TUI{RESET} {DIM}• Anilibria / YummyAnime / HDRezka / AnimeVost{RESET}\n"
+                    f" Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka │ Alt+5 AnimeVost \n"
+                    f" Alt+G Жанри │ Alt+T Тема │ Alt+D Завантаження │ {t('header_nav_hint')}"
                 )
             else:
                 header = (
                     BANNER + "\n"
-                    f" [ Alt+1 АніЛібрія ]   [ Alt+2 YummyAnime ]   [ Alt+3 HDRezka ]   [ Alt+4 {t('provider_favorites')} ] \n"
-                    f" {t('header_nav_hint')}"
+                    f"{DIM}[ Alt+1 АніЛібрія ]   [ Alt+2 YummyAnime ]   [ Alt+3 HDRezka ]   [ Alt+5 AnimeVost ]   [ Alt+4 Улюблені ]{RESET}\n"
+                    f"{DIM}[ Alt+G Жанри ]   [ Alt+T Змінити Тему ]   [ Alt+D Завантаження ]   ↑↓ навігація | Enter — обрати | Esc — вихід{RESET}"
                 )
 
             # Non-empty placeholder so fzf does NOT exit immediately on empty stdin.
@@ -187,12 +171,23 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
                     f"+reload({search_cmd})"
                 ),
                 "--bind", (
+                    f"alt-5:execute-silent(echo animevost > {pf})"
+                    f"+change-border-label( {t('header_search_title')}: AnimeVost )"
+                    f"+reload({search_cmd})"
+                ),
+                "--bind", (
                     f"alt-4:execute-silent(echo favorites > {pf})"
                     f"+change-border-label( {t('header_search_title')}: {t('provider_favorites')} )"
                     f"+reload({search_cmd})"
                 ),
                 "--bind", (
                     f"alt-g:execute-silent(echo __GENRE_SELECT__ > {alt_g_file}; echo {{q}} >> {alt_g_file})+abort"
+                ),
+                "--bind", (
+                    f"alt-t:execute-silent(echo __THEME_SELECT__ > {alt_g_file})+abort"
+                ),
+                "--bind", (
+                    f"alt-d:execute-silent(echo __DOWNLOADS_UI__ > {alt_g_file})+abort"
                 ),
             ]
 
@@ -220,6 +215,26 @@ def search_anime(initial_provider: str = "anilibria", initial_query: str = "") -
                         initial_query = f"{current_query} genre:{chosen_genre}".strip()
                     else:
                         initial_query = current_query
+                    initial_provider = provider_file.read_text().strip()
+                    continue
+                elif content and content[0] == "__THEME_SELECT__":
+                    from .theme import THEMES
+                    chosen_theme = select(list(THEMES.keys()), prompt="Оберіть тему > ", header="Зміна теми (Застосується миттєво)")
+                    if chosen_theme:
+                        from . import config as cfg
+                        if not cfg._CONFIG_FILE.exists():
+                            cfg.write_default_config()
+                        cfg_content = cfg._CONFIG_FILE.read_text(encoding="utf-8")
+                        cfg_content = re.sub(r'theme\s*=\s*".*"', f'theme = "{chosen_theme}"', cfg_content)
+                        cfg._CONFIG_FILE.write_text(cfg_content, encoding="utf-8")
+                        # Restart to apply global imports
+                        os.execv(sys.executable, [sys.executable, "-m", "anime_tui.main"])
+                    else:
+                        initial_query = content[1] if len(content) > 1 else ""
+                        initial_provider = provider_file.read_text().strip()
+                        continue
+                elif content and content[0] == "__DOWNLOADS_UI__":
+                    subprocess.run([sys.executable, "-m", "anime_tui.status_ui"])
                     initial_provider = provider_file.read_text().strip()
                     continue
 

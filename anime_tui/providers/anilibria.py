@@ -9,8 +9,9 @@ from __future__ import annotations
 import requests
 from ..models import Anime, Episode, Quality, Stream
 from .base import BaseProvider
+from ..config import get as get_config
+from ..proxy import ProxyManager
 
-API_BASE = "https://anilibria.top/api/v1"
 DEFAULT_TIMEOUT = 15
 
 HEADERS = {
@@ -23,15 +24,16 @@ class AnilibriaProvider(BaseProvider):
     name = "anilibria"
 
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(HEADERS)
+        self.session = ProxyManager.get_session()
+        self.api_base = get_config("anilibria.api_base", "https://anilibria.top/api/v1")
+        self.stream_host = get_config("anilibria.stream_host", "https://cache.libria.fun")
 
     def search(self, query: str, limit: int = 20) -> list[Anime]:
         if not query:
-            url = f"{API_BASE}/anime/releases/latest"
+            url = f"{self.api_base}/anime/releases/latest"
             params = {}
         else:
-            url = f"{API_BASE}/app/search/releases"
+            url = f"{self.api_base}/app/search/releases"
             params = {"query": query}
 
         resp = self.session.get(url, params=params, timeout=DEFAULT_TIMEOUT)
@@ -43,7 +45,7 @@ class AnilibriaProvider(BaseProvider):
         # Fetch detailed release info to get episodes list
         release_id = anime.id
         resp = self.session.get(
-            f"{API_BASE}/anime/releases/{release_id}",
+            f"{self.api_base}/anime/releases/{release_id}",
             timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
@@ -87,6 +89,8 @@ class AnilibriaProvider(BaseProvider):
         for label, key in quality_map:
             url = episode._meta.get(key)
             if url:
+                if url.startswith("/"):
+                    url = self.stream_host + url
                 qualities.append(Quality(label=label, url=url))
 
         return Stream(qualities=qualities)

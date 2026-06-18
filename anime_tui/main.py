@@ -13,10 +13,14 @@ from __future__ import annotations
 import argparse
 import sys
 import os
-
-import requests.exceptions
 import time
 import shutil
+import subprocess
+import json
+import tempfile
+from pathlib import Path
+
+import requests.exceptions
 
 from . import config as cfg
 from . import ui, player, history, favorites
@@ -30,10 +34,13 @@ def _get_provider(name: str) -> BaseProvider:
     from .providers.anilibria import AnilibriaProvider
     from .providers.yummyanime import YummyAnimeProvider
     from .providers.rezka import RezkaProvider
+    from .providers.animevost import AnimeVostProvider
+
     mapping = {
         "anilibria":  AnilibriaProvider,
         "yummyanime": YummyAnimeProvider,
         "rezka":      RezkaProvider,
+        "animevost":  AnimeVostProvider,
     }
     cls = mapping.get(name)
     if cls is None:
@@ -46,15 +53,10 @@ PROVIDER_DESCRIPTIONS = {
     "anilibria":  "АніЛібрія  — офіційне API, аніме з озвучкою",
     "yummyanime": "YummyAnime — скрейпінг + yt-dlp",
     "rezka":      "HDRezka    — фільми та серіали з кількома озвучками",
+    "animevost":  "AnimeVost  — швидке API, стабільно без VPN",
 }
 
-RESET  = "\033[0m"
-BOLD   = "\033[1m"
-CYAN   = "\033[38;5;87m"
-GREEN  = "\033[38;5;82m"
-YELLOW = "\033[38;5;220m"
-RED    = "\033[38;5;196m"
-DIM    = "\033[2m"
+from .theme import CYAN, GREEN, YELLOW, RED, DIM, BOLD, RESET
 
 
 def _err(msg: str):
@@ -71,6 +73,45 @@ def _err_network(exc: Exception, provider: str):
 
 def _info(msg: str):
     print(f"{CYAN}[info]{RESET} {msg}")
+
+def spawn_bg_download(anime: Anime, provider_name: str, quality_label: str, episodes: list[Episode]):
+    job_data = {
+        "provider": provider_name,
+        "quality": quality_label,
+        "anime": {
+            "id": anime.id,
+            "title_ru": anime.title_ru,
+            "_meta": anime._meta,
+        },
+        "episodes": [
+            {
+                "number": ep.number,
+                "title": ep.title,
+                "_meta": ep._meta,
+            } for ep in episodes
+        ]
+    }
+    
+    tmpdir = Path(tempfile.gettempdir())
+    job_file = tmpdir / f"anime_tui_bg_job_{int(time.time()*1000)}.json"
+    job_file.write_text(json.dumps(job_data, ensure_ascii=False), encoding="utf-8")
+    
+    if os.name == 'nt':
+        subprocess.Popen(
+            [sys.executable, "-m", "anime_tui.bg_downloader", str(job_file)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:
+        subprocess.Popen(
+            [sys.executable, "-m", "anime_tui.bg_downloader", str(job_file)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+    _info(f"{GREEN}Завантаження ({len(episodes)} серій) додано у фон!{RESET}")
+    time.sleep(1.5)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -130,13 +171,24 @@ def episode_loop(provider: BaseProvider, anime: Anime, preferred_quality: str):
             def ep_display(ep):
                 if ep.number == -1:
                     return f"{YELLOW}{'★' if is_fav else '☆'}{RESET} {ep.title}"
+                if ep.number == -2:
+                    return f"{CYAN}📥{RESET} {ep.title}"
                 ep_id = str(ep.number)
                 mark = f"{ui.MAGENTA}✓{ui.RESET} " if ep_id in watched_eps else "  "
                 return f"{mark}{ep.display()}"
 
             fav_title = t("btn_remove_favorite") if is_fav else t("btn_add_favorite")
             fav_ep = Episode(number=-1, title=fav_title)
-            display_episodes = [fav_ep] + episodes
+            download_all_ep = Episode(number=-2, title=t("btn_download_all"))
+            display_episodes = [fav_ep, download_all_ep] + episodes
+
+            # Calculate watched progress
+            watched_count = len([e for e in episodes if str(e.number) in watched_eps])
+            total_eps = len(episodes)
+            bar_len = 10
+            filled = int((watched_count / total_eps) * bar_len) if total_eps > 0 else 0
+            progress_bar = f"{GREEN}{'■' * filled}{DIM}{'□' * (bar_len - filled)}{RESET}"
+            progress_text = f" {progress_bar} {watched_count}/{total_eps} "
 
             episode = ui.select(
                 display_episodes,
@@ -144,7 +196,7 @@ def episode_loop(provider: BaseProvider, anime: Anime, preferred_quality: str):
                 prompt=t("prompt_episode"),
                 header=(
                     f"{BOLD}{anime.display()}{RESET}\n"
-                    f" {len(episodes)} {t('header_episodes_hint').format(provider.name.upper())}"
+                    f" {len(episodes)} {t('header_episodes_hint').format(provider.name.upper())} │ {progress_text}"
                 ),
             )
             if episode is None:
@@ -157,6 +209,50 @@ def episode_loop(provider: BaseProvider, anime: Anime, preferred_quality: str):
                     
             if episode.number == -1:
                 favorites.toggle_favorite(anime)
+                continue
+
+            if episode.number == -2:
+                # Download all
+                _info(f"{t('info_loading_stream')} 1…")
+                if not episodes: continue
+                first_ep = episodes[0]
+                try:
+                    stream = provider.get_stream(anime, first_ep)
+                except requests.exceptions.ConnectionError as exc:
+                    _err_network(exc, provider.name)
+                    continue
+                except Exception as exc:
+                    _err(f"{t('err_loading_stream')}: {exc}")
+                    continue
+                
+                if not stream.qualities:
+                    _err(t("err_no_stream"))
+                    continue
+                
+                chosen = ui.select(
+                    stream.qualities,
+                    display_fn=lambda q: f"{q.label}",
+                    prompt=t("prompt_quality"),
+                    header=t("header_quality").format("ALL", len(stream.qualities)),
+                )
+                if not chosen:
+                    continue
+                
+                spawn_bg_download(anime, provider.name, chosen.label, episodes)
+                continue
+
+            # Normal episode action menu
+            action = ui.select(
+                [
+                    {"id": "play", "title": t("btn_play")},
+                    {"id": "download", "title": t("btn_download")}
+                ],
+                display_fn=lambda x: x["title"],
+                prompt=t("prompt_action"),
+                header=f"{BOLD}{episode.display()}{RESET}"
+            )
+            
+            if not action:
                 continue
 
             # ── Get stream ─────────────────────────────────────────────────
@@ -175,15 +271,16 @@ def episode_loop(provider: BaseProvider, anime: Anime, preferred_quality: str):
                 continue
 
             # ── Quality selection ──────────────────────────────────────────
-            chosen: Quality | None = None
-            # Try preferred quality first
-            for q in stream.qualities:
-                if q.label == preferred_quality:
-                    chosen = q
-                    break
+            chosen = None
+            if preferred_quality == "best" and stream.qualities:
+                chosen = stream.qualities[0]
+            else:
+                for q in stream.qualities:
+                    if q.label == preferred_quality:
+                        chosen = q
+                        break
 
             if chosen is None:
-                # Prompt user to pick
                 chosen = ui.select(
                     stream.qualities,
                     display_fn=lambda q: f"{q.label}",
@@ -192,14 +289,15 @@ def episode_loop(provider: BaseProvider, anime: Anime, preferred_quality: str):
                 )
 
             if chosen is None:
-                continue # back to episode list
+                continue
 
-            # ── Play ───────────────────────────────────────────────────────
-            _info(f"{t('info_playing')} [{chosen.label}]…")
-            player.play(quality=chosen, episode=episode, title=anime.title_ru)
-            
-            # After playback: mark as watched and loop back
-            history.mark_watched(provider.name, str(anime.id), str(episode.number))
+            # ── Action ──────────────────────────────────────────────────────
+            if action["id"] == "play":
+                _info(f"{t('info_playing')} [{chosen.label}]…")
+                player.play(quality=chosen, episode=episode, title=anime.title_ru)
+                history.mark_watched(provider.name, str(anime.id), str(episode.number))
+            elif action["id"] == "download":
+                spawn_bg_download(anime, provider.name, chosen.label, [episode])
 
         if back_to_translators:
             continue
@@ -267,6 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     Ctrl+1  →  перемкнути на АніЛібрія
     Ctrl+2  →  перемкнути на YummyAnime
     Ctrl+3  →  перемкнути на HDRezka
+    Ctrl+5  →  перемкнути на AnimeVost
     Esc     →  назад / вихід
         """,
     )
@@ -274,7 +373,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-p", "--provider",
         metavar="ПРОВАЙДЕР",
         default=None,
-        help="Стартовий провайдер: anilibria, yummyanime, rezka",
+        help="Стартовий провайдер: anilibria, yummyanime, rezka, animevost",
     )
     parser.add_argument(
         "--quality",
@@ -309,17 +408,17 @@ def main():
         print(f"\n{BOLD}{t('cli_available_providers')}{RESET}\n")
         for name, desc in PROVIDER_DESCRIPTIONS.items():
             print(f"  {GREEN}●{RESET} {BOLD}{name:<14}{RESET}  {DIM}{desc}{RESET}")
-        print(f"\n{DIM}В інтерфейсі: Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka{RESET}\n")
+        print(f"\n{DIM}В інтерфейсі: Alt+1 АніЛібрія │ Alt+2 YummyAnime │ Alt+3 HDRezka │ Alt+5 AnimeVost{RESET}\n")
         sys.exit(0)
 
     # ── Resolve provider and quality ───────────────────────────────────
     provider_name = args.provider or cfg.get("default_provider", "anilibria")
-    quality       = args.quality  or cfg.get("default_quality",  "720p")
+    quality       = args.quality  or cfg.get("default_quality",  "best")
 
-    valid_providers = {"anilibria", "yummyanime", "rezka"}
+    valid_providers = {"anilibria", "yummyanime", "rezka", "animevost"}
     if provider_name not in valid_providers:
-        _err(f"Невідомий провайдер '{provider_name}'. Використовую 'anilibria'.")
-        provider_name = "anilibria"
+        _err(f"Невідомий провайдер '{provider_name}'. Використовую 'animevost'.")
+        provider_name = "animevost"
 
     def show_splash():
         if not sys.stdout.isatty():
