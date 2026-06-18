@@ -7,6 +7,12 @@
 - **АніЛібрія** (Anilibria)
 - **YummyAnime**
 - **HDRezka**
+  
+## Скріншоти 📸
+  <img width="2834" height="1694" alt="image" src="https://github.com/user-attachments/assets/6ff3ef3b-efbb-4b0f-ba44-f769293d707e" />
+  <img width="2848" height="1723" alt="image" src="https://github.com/user-attachments/assets/336dd0d6-8701-4f2a-bb09-7f14bb20dc6c" />
+
+
 
 ## Особливості 🌟
 - 🚀 **Блискавичний пошук** із живим оновленням результатів (powered by `fzf`).
@@ -62,9 +68,6 @@ anime-tui
 - `Alt+4` — Відкрити "Улюблені"
 - `Alt+G` — Відкрити меню вибору жанрів
 - `Esc` — Вихід
-
-## Скріншоти 📸
-*(додайте сюди скріншоти вашого TUI)*
 
 ## Ліцензія
 MIT
